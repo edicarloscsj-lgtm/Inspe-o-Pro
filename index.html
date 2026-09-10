@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Inspeção PRO</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Inspeção PRO">
+  <meta name="theme-color" content="#090d16">
+
+  <link rel="manifest" href="./manifest.json">
+
+  <!-- Estilos e Bibliotecas -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .btn-status.active-conforme { background: linear-gradient(135deg, #059669, #10b981) !important; color: white !important; }
+    .btn-status.active-naoconforme { background: linear-gradient(135deg, #dc2626, #ef4444) !important; color: white !important; }
+    .btn-status.active-na { background: linear-gradient(135deg, #475569, #64748b) !important; color: white !important; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-amber-500 selection:text-white">
+
+  <!-- TOPBAR COM STATUS DE REDE E SYNC OFFLINE -->
+  <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 px-4 py-3">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-400 flex items-center justify-center shadow-lg shadow-amber-500/20">
+          <i class="fa-solid fa-shield-halved text-slate-950 text-base"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight text-white flex items-center gap-2">
+            Inspeção PRO
+            <span id="badgeRede" class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Online</span>
+          </h1>
+          <p class="text-[11px] text-slate-400">Segurança & Conformidade Operacional</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-2">
+        <button id="btnSincronizar" onclick="sincronizarFilaOffline()" class="hidden text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition animate-pulse">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Sync (<span id="contagemPendentes">0</span>)
+        </button>
+
+        <button onclick="carregarTudo()" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 p-2 rounded-lg transition">
+          <i class="fa-solid fa-rotate text-amber-400"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="max-w-4xl mx-auto w-full p-4 mb-20 flex-1 space-y-5">
+
+    <!-- ABA 1: DASHBOARD -->
+    <div id="view-dashboard" class="space-y-4">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-slate-900/70 border border-slate-800 p-4 rounded-2xl">
+          <span class="text-xs font-medium text-slate-400 uppercase tracking-wider block">Ativos Cadastrados</span>
+          <div class="text-2xl font-black text-white mt-1" id="kpiTotalAtivos">276</div>
+          <span class="text-[11px] text-emerald-400 font-semibold mt-1 block">100% mapeados</span>
+        </div>
+
+        <div class="bg-slate-900/70 border border-slate-800 p-4 rounded-2xl">
+          <span class="text-xs font-medium text-slate-400 uppercase tracking-wider block">Inspeções no Ciclo</span>
+          <div class="text-2xl font-black text-indigo-400 mt-1" id="kpiTotalInsp">0</div>
+          <span class="text-[11px] text-slate-400 font-medium mt-1 block">Histórico</span>
+        </div>
+
+        <div class="bg-slate-900/70 border border-slate-800 p-4 rounded-2xl">
+          <span class="text-xs font-medium text-slate-400 uppercase tracking-wider block">Conformidade</span>
+          <div class="text-2xl font-black text-emerald-400 mt-1" id="kpiTaxaConformidade">100%</div>
+          <span class="text-[11px] text-emerald-300 font-medium mt-1 block">Aprovados</span>
+        </div>
+
+        <div onclick="abrirModalVencimentos()" class="bg-gradient-to-br from-amber-500/10 to-slate-900 border border-amber-500/30 hover:border-amber-400 p-4 rounded-2xl cursor-pointer transition">
+          <div class="flex justify-between items-start">
+            <span class="text-xs font-bold text-amber-400 uppercase tracking-wider">Recargas a Vencer</span>
+            <i class="fa-solid fa-arrow-up-right-from-square text-xs text-amber-400/70"></i>
+          </div>
+          <div class="text-2xl font-black text-amber-300 mt-1" id="kpiVencimentos">0</div>
+          <span class="text-[11px] text-amber-400/90 font-medium mt-1 flex items-center gap-1">
+            <i class="fa-solid fa-hand-pointer text-[10px]"></i> Ver detalhes
+          </span>
+        </div>
+      </div>
+
+      <!-- Gráficos -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2 mb-3">
+            <i class="fa-solid fa-chart-pie text-amber-400"></i> Tipos de Ativos
+          </h3>
+          <div class="h-56 relative flex items-center justify-center">
+            <canvas id="chartTipos"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2 mb-3">
+            <i class="fa-solid fa-chart-column text-indigo-400"></i> Distribuição por Base
+          </h3>
+          <div class="h-56 relative">
+            <canvas id="chartEstacoes"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Últimas Atividades -->
+      <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2 mb-3">
+          <i class="fa-solid fa-clock-rotate-left text-slate-400"></i> Últimas Atividades
+        </h3>
+        <div id="listaUltimasInspecoes" class="space-y-2">
+          <div class="text-center py-6 text-slate-500 text-xs">Nenhuma inspeção recente.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABA 2: REALIZAR INSPEÇÃO -->
+    <div id="view-inspecao" class="hidden space-y-4">
+      <div id="sec-busca" class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <i class="fa-solid fa-filter text-amber-400"></i> Localizar Equipamento
+          </h2>
+          <span class="text-xs text-slate-400"><b id="contagemEquip" class="text-amber-400">0</b> disponíveis</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Estação / Polo</label>
+          <select id="selEstacao" onchange="aoMudarFiltro()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            <option value="">Todas as Estações</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Tipo de Ativo</label>
+            <select id="selTipo" onchange="aoMudarFiltro()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+              <option value="">Todos os Tipos</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Buscar TAG</label>
+            <input type="text" id="txtBuscaTag" oninput="filtrarListaLocal()" placeholder="Ex: 6, 347..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <div id="listaCardsEquip" class="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar"></div>
+        </div>
+      </div>
+
+      <!-- FICHA ATIVO -->
+      <div id="sec-detalhes" class="bg-slate-900 border border-indigo-500/40 p-5 rounded-2xl hidden space-y-3">
+        <div class="flex justify-between items-start">
+          <div>
+            <span id="badgeTipo" class="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">EXTINTOR</span>
+            <h3 id="cardTag" class="text-2xl font-black text-white mt-1">TAG: ---</h3>
+            <p id="cardLocal" class="text-xs text-indigo-200/80 mt-0.5">Localização</p>
+          </div>
+          <button onclick="desmarcarEquipamento()" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 px-3 py-1.5 rounded-lg text-slate-200">Trocar</button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+          <div><span class="text-slate-400">Detalhe:</span> <b id="cardDetalhe" class="text-white">-</b></div>
+          <div><span class="text-slate-400">Capacidade:</span> <b id="cardCapacidade" class="text-white">-</b></div>
+          <div><span class="text-slate-400">Chassi:</span> <b id="cardChassi" class="text-white">-</b></div>
+          <div><span class="text-slate-400">Lacre/Carseal:</span> <b id="cardLacre" class="text-white">-</b></div>
+          <div><span class="text-slate-400">Próx. Recarga:</span> <b id="cardRecarga" class="text-white">-</b></div>
+          <div><span class="text-slate-400">Próx. Hidro:</span> <b id="cardHidro" class="text-white">-</b></div>
+        </div>
+      </div>
+
+      <!-- CHECKLIST -->
+      <div id="sec-checklist" class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl space-y-4 hidden">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800 pb-2">Itens de Verificação</h3>
+        <div id="containerPerguntas" class="space-y-3"></div>
+
+        <div class="border-t border-slate-800 pt-3 space-y-2">
+          <label class="block text-xs font-semibold text-slate-300">Evidência Fotográfica</label>
+          <label class="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-medium py-3 px-4 rounded-xl border border-dashed border-slate-600 cursor-pointer">
+            <i class="fa-solid fa-camera text-amber-400"></i>
+            <span id="labelFoto">Tirar ou Anexar Foto</span>
+            <input type="file" id="inputFoto" accept="image/*" capture="environment" class="hidden" onchange="previewFoto(event)">
+          </label>
+          <div id="boxPreviewFoto" class="hidden relative mt-2 rounded-xl overflow-hidden max-h-48 border border-slate-700">
+            <img id="imgPreview" class="w-full h-full object-cover">
+            <button onclick="removerFoto()" class="absolute top-2 right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Observações</label>
+          <textarea id="txtObs" rows="2" placeholder="Observações..." class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Técnico Inspetor</label>
+          <input type="text" id="txtInspetor" placeholder="Nome do técnico" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+        </div>
+
+        <button id="btnSalvar" onclick="salvarInspecao()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition">
+          Gravar Inspeção
+        </button>
+      </div>
+    </div>
+
+    <!-- ABA 3: ADMIN & RELATÓRIO PDF -->
+    <div id="view-admin" class="hidden space-y-5">
+      <div class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl space-y-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-file-pdf text-red-500"></i> Emissão de Relatório em PDF
+        </h3>
+        <p class="text-xs text-slate-400">Gere o laudo técnico consolidado por setor para auditoria.</p>
+        <div class="flex flex-col sm:flex-row gap-2 pt-2">
+          <select id="selEstacaoPdf" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:outline-none">
+            <option value="">Selecione o Setor / Estação (Ex: LM Pojuca)</option>
+          </select>
+          <button onclick="emitirRelatorioPDF()" class="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-download"></i> Gerar PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl space-y-4">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-amber-400"></i> Gerenciador de Perguntas
+        </h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs text-slate-300 font-medium mb-1">Categoria de Ativo</label>
+            <select id="selAdminTipoEquip" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm text-white"></select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-300 font-medium mb-1">Item a Inspecionar</label>
+            <input type="text" id="txtAdminPergunta" placeholder="Ex: Integridade da mangueira" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <select id="selAdminFormatoResp" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
+              <option value="CONFORME_NAO_CONFORME_NA">Conforme / Não Conf. / N/A</option>
+              <option value="SIM_NAO">Sim / Não</option>
+            </select>
+            <select id="selAdminObrigatorio" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm text-white">
+              <option value="SIM">Obrigatório</option>
+              <option value="NAO">Opcional</option>
+            </select>
+          </div>
+          <button onclick="salvarNovaPerguntaAdmin()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 rounded-xl transition">
+            Inserir no Checklist
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- NAVEGAÇÃO INFERIOR -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 z-40 py-2">
+    <div class="max-w-md mx-auto grid grid-cols-3 px-4 gap-1">
+      <button id="navBtnDashboard" onclick="mudarAba('dashboard')" class="flex flex-col items-center justify-center py-1.5 rounded-xl text-amber-400 font-semibold transition">
+        <i class="fa-solid fa-chart-line text-base mb-0.5"></i>
+        <span class="text-[10px]">Dashboard</span>
+      </button>
+
+      <button id="navBtnInspecao" onclick="mudarAba('inspecao')" class="flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-400 font-medium transition">
+        <i class="fa-solid fa-list-check text-base mb-0.5"></i>
+        <span class="text-[10px]">Inspecionar</span>
+      </button>
+
+      <button id="navBtnAdmin" onclick="mudarAba('admin')" class="flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-400 font-medium transition">
+        <i class="fa-solid fa-gear text-base mb-0.5"></i>
+        <span class="text-[10px]">Admin & PDF</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MODAL VENCIMENTOS (DRILL-DOWN) -->
+  <div id="modalVencimentos" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-850">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Detalhamento de Vencimentos
+        </h3>
+        <button onclick="fecharModalVencimentos()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="conteudoModalVencimentos" class="p-4 overflow-y-auto space-y-2 flex-1 custom-scrollbar"></div>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="modalLoading" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3">
+      <i class="fa-solid fa-circle-notch fa-spin text-3xl text-amber-400"></i>
+      <p id="txtLoading" class="text-xs font-semibold text-slate-200">Processando...</p>
+    </div>
+  </div>
+
+  <!-- SCRIPT CLIENT-SIDE & OFFLINE ENGINE -->
+  <script>
+    // ==========================================
+    // CONFIGURAÇÃO DA API (COLE O LINK DA SUA IMPLANTAÇÃO AQUI)
+    // ==========================================
+    const APPSCRIPT_URL = "SEU_LINK_DO_WEBAPP_AQUI"; // Ex: https://script.google.com/macros/s/.../exec
+
+    let bancoEquipamentos = [];
+    let equipamentoAtual = null;
+    let perguntasAtuais = [];
+    let fotoBase64Atual = null;
+    let chartTiposInstance = null;
+    let chartEstacoesInstance = null;
+
+    // 1. REGISTRO DO SERVICE WORKER (PWA OFFLINE)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(() => console.log('ServiceWorker registrado com sucesso.'))
+          .catch(err => console.log('Falha ao registrar ServiceWorker:', err));
+      });
+    }
+
+    // 2. MONITOR DE CONECTIVIDADE
+    window.addEventListener('online', atualizarStatusRede);
+    window.addEventListener('offline', atualizarStatusRede);
+
+    function atualizarStatusRede() {
+      const badge = document.getElementById("badgeRede");
+      if (navigator.onLine) {
+        badge.textContent = "Online";
+        badge.className = "text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        verificarFilaOffline();
+      } else {
+        badge.textContent = "Offline";
+        badge.className = "text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20";
+      }
+    }
+
+    // 3. CAMADA DE API COM SUPORTE HÍBRIDO (GITHUB FETCH OU APPS SCRIPT DIRETO)
+    async function chamarBackend(acao, parametros = {}) {
+      // Se estiver rodando dentro do próprio Apps Script
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        return new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)[acao](...Object.values(parametros));
+        });
+      }
+
+      // Se estiver rodando no GitHub Pages / Servidor Externo
+      if (APPSCRIPT_URL === "SEU_LINK_DO_WEBAPP_AQUI") {
+        throw new Error("Configure o link do seu WebApp na constante APPSCRIPT_URL.");
+      }
+
+      const bodyData = { acao, ...parametros };
+      const response = await fetch(APPSCRIPT_URL, {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(bodyData)
+      });
+      return await response.json();
+    }
+
+    // 4. INICIALIZAÇÃO
+    window.onload = function() {
+      atualizarStatusRede();
+      verificarFilaOffline();
+      carregarTudo();
+    };
+
+    function carregarTudo() {
+      carregarDashboard();
+      carregarDadosIniciais();
+    }
+
+    async function carregarDashboard() {
+      try {
+        const dados = await chamarBackend("obterDadosDashboard");
+        // Salva cache local
+        localStorage.setItem("cache_dashboard", JSON.stringify(dados));
+        renderizarDashboard(dados);
+      } catch (e) {
+        // Fallback offline: lê do cache
+        const cache = localStorage.getItem("cache_dashboard");
+        if (cache) renderizarDashboard(JSON.parse(cache));
+      }
+    }
+
+    function renderizarDashboard(dados) {
+      document.getElementById("kpiTotalAtivos").textContent = dados.totalAtivos;
+      document.getElementById("kpiTotalInsp").textContent = dados.totalInspecoes;
+      document.getElementById("kpiVencimentos").textContent = dados.extintoresVencendo30Dias + dados.extintoresVencidos;
+      
+      let taxa = 100;
+      if (dados.totalInspecoes > 0) taxa = Math.round((dados.conformes / dados.totalInspecoes) * 100);
+      document.getElementById("kpiTaxaConformidade").textContent = taxa + "%";
+
+      renderizarGraficos(dados);
+      renderizarUltimasInspecoes(dados.ultimasInspecoes);
+    }
+
+    async function carregarDadosIniciais() {
+      try {
+        const res = await chamarBackend("carregarDadosIniciais");
+        localStorage.setItem("cache_dados_iniciais", JSON.stringify(res));
+        popularMenus(res);
+        carregarEquipamentos();
+      } catch (e) {
+        const cache = localStorage.getItem("cache_dados_iniciais");
+        if (cache) {
+          popularMenus(JSON.parse(cache));
+          carregarEquipamentos();
+        }
+      }
+    }
+
+    function popularMenus(res) {
+      const selEst = document.getElementById("selEstacao");
+      const selPdf = document.getElementById("selEstacaoPdf");
+      selEst.innerHTML = '<option value="">Todas as Estações</option>';
+      selPdf.innerHTML = '<option value="">Selecione o Setor / Estação</option>';
+
+      res.estacoes.forEach(e => {
+        selEst.innerHTML += `<option value="${e.id}">${e.nome} (${e.polo})</option>`;
+        selPdf.innerHTML += `<option value="${e.id}">${e.nome} (${e.polo})</option>`;
+      });
+
+      const selTip = document.getElementById("selTipo");
+      const selAdminTip = document.getElementById("selAdminTipoEquip");
+      selTip.innerHTML = '<option value="">Todos os Tipos</option>';
+      selAdminTip.innerHTML = '';
+
+      res.tipos.forEach(t => {
+        selTip.innerHTML += `<option value="${t.id}">${t.nome}</option>`;
+        selAdminTip.innerHTML += `<option value="${t.id}">${t.nome}</option>`;
+      });
+    }
+
+    async function carregarEquipamentos() {
+      const est = document.getElementById("selEstacao").value;
+      const tip = document.getElementById("selTipo").value;
+
+      try {
+        const lista = await chamarBackend("listarEquipamentos", { idEstacao: est, idTipo: tip });
+        bancoEquipamentos = lista;
+        localStorage.setItem(`cache_equip_${est}_${tip}`, JSON.stringify(lista));
+        renderizarListaEquipamentos(lista);
+      } catch (e) {
+        const cache = localStorage.getItem(`cache_equip_${est}_${tip}`);
+        if (cache) {
+          bancoEquipamentos = JSON.parse(cache);
+          renderizarListaEquipamentos(bancoEquipamentos);
+        }
+      }
+    }
+
+    function aoMudarFiltro() { carregarEquipamentos(); }
+
+    function filtrarListaLocal() {
+      const b = document.getElementById("txtBuscaTag").value.toLowerCase().trim();
+      const filtrados = bancoEquipamentos.filter(eq => {
+        return eq.tag.toLowerCase().includes(b) || eq.localizacao.toLowerCase().includes(b);
+      });
+      renderizarListaEquipamentos(filtrados);
+    }
+
+    function renderizarListaEquipamentos(lista) {
+      const container = document.getElementById("listaCardsEquip");
+      document.getElementById("contagemEquip").textContent = lista.length;
+      container.innerHTML = "";
+
+      if (lista.length === 0) {
+        container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Nenhum equipamento encontrado.</div>`;
+        return;
+      }
+
+      lista.forEach(eq => {
+        const card = document.createElement("div");
+        card.className = "p-3 bg-slate-800/60 border border-slate-700/70 hover:border-amber-400 cursor-pointer rounded-xl transition flex justify-between items-center";
+        card.onclick = () => selecionarEquipamento(eq);
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-black text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">TAG ${eq.tag}</span>
+              <span class="text-[11px] text-slate-400">${eq.tipoDetalhe || eq.idTipo}</span>
+            </div>
+            <p class="text-xs text-slate-300 mt-1 line-clamp-1">${eq.localizacao || 'Sem localização'}</p>
+          </div>
+          <i class="fa-solid fa-chevron-right text-slate-500 text-xs"></i>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function selecionarEquipamento(eq) {
+      equipamentoAtual = eq;
+      document.getElementById("sec-busca").classList.add("hidden");
+      document.getElementById("cardTag").textContent = "TAG: " + eq.tag;
+      document.getElementById("cardLocal").textContent = eq.localizacao || "-";
+      document.getElementById("badgeTipo").textContent = eq.idTipo;
+      document.getElementById("cardDetalhe").textContent = eq.tipoDetalhe || "-";
+      document.getElementById("cardCapacidade").textContent = eq.capacidadeCarga || "-";
+      document.getElementById("cardChassi").textContent = eq.chassi || "-";
+      document.getElementById("cardLacre").textContent = eq.carseal || "-";
+      document.getElementById("cardRecarga").textContent = eq.proxRecarga || "-";
+      document.getElementById("cardHidro").textContent = eq.proxHidro || "-";
+      document.getElementById("sec-detalhes").classList.remove("hidden");
+
+      exibirLoading("Carregando checklist...");
+      try {
+        let perguntas = [];
+        try {
+          perguntas = await chamarBackend("obterPerguntasPorTipo", { idTipo: eq.idTipo });
+          localStorage.setItem(`cache_perguntas_${eq.idTipo}`, JSON.stringify(perguntas));
+        } catch (err) {
+          perguntas = JSON.parse(localStorage.getItem(`cache_perguntas_${eq.idTipo}`)) || [];
+        }
+        ocultarLoading();
+        perguntasAtuais = perguntas;
+        renderizarChecklist(perguntas);
+        document.getElementById("sec-checklist").classList.remove("hidden");
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (e) {
+        ocultarLoading();
+        alert("Erro ao carregar itens do checklist: " + e.message);
+      }
+    }
+
+    function desmarcarEquipamento() {
+      equipamentoAtual = null;
+      document.getElementById("sec-detalhes").classList.add("hidden");
+      document.getElementById("sec-checklist").classList.add("hidden");
+      document.getElementById("sec-busca").classList.remove("hidden");
+      removerFoto();
+    }
+
+    function renderizarChecklist(perguntas) {
+      const container = document.getElementById("containerPerguntas");
+      container.innerHTML = "";
+
+      perguntas.forEach((p, idx) => {
+        const box = document.createElement("div");
+        box.className = "bg-slate-800/40 border border-slate-700/60 p-3.5 rounded-xl space-y-2";
+        let htmlRespostas = "";
+
+        if (p.tipoResposta === "CONFORME_NAO_CONFORME_NA") {
+          htmlRespostas = `
+            <div class="grid grid-cols-3 gap-2 mt-2">
+              <button type="button" class="btn-status py-2.5 rounded-lg border border-slate-700 text-xs font-semibold bg-slate-800 text-slate-300" onclick="marcarResposta('${p.idPergunta}', 'Conforme', this)">Conforme</button>
+              <button type="button" class="btn-status py-2.5 rounded-lg border border-slate-700 text-xs font-semibold bg-slate-800 text-slate-300" onclick="marcarResposta('${p.idPergunta}', 'Não Conforme', this)">Não Conf.</button>
+              <button type="button" class="btn-status py-2.5 rounded-lg border border-slate-700 text-xs font-semibold bg-slate-800 text-slate-300" onclick="marcarResposta('${p.idPergunta}', 'N/A', this)">N/A</button>
+            </div>
+          `;
+        } else {
+          htmlRespostas = `
+            <div class="grid grid-cols-2 gap-2 mt-2">
+              <button type="button" class="btn-status py-2.5 rounded-lg border border-slate-700 text-xs font-semibold bg-slate-800 text-slate-300" onclick="marcarResposta('${p.idPergunta}', 'Sim', this)">Sim</button>
+              <button type="button" class="btn-status py-2.5 rounded-lg border border-slate-700 text-xs font-semibold bg-slate-800 text-slate-300" onclick="marcarResposta('${p.idPergunta}', 'Não', this)">Não</button>
+            </div>
+          `;
+        }
+
+        box.innerHTML = `
+          <div class="flex justify-between items-start">
+            <span class="text-xs font-bold text-slate-200">${idx + 1}. ${p.item}</span>
+            <input type="hidden" id="resp_${p.idPergunta}" data-obrigatorio="${p.obrigatorio}">
+          </div>
+          ${htmlRespostas}
+        `;
+        container.appendChild(box);
+      });
+    }
+
+    function marcarResposta(idPergunta, valor, btn) {
+      document.getElementById("resp_" + idPergunta).value = valor;
+      const pai = btn.parentElement;
+      pai.querySelectorAll(".btn-status").forEach(b => {
+        b.className = "btn-status py-2.5 rounded-lg border border-slate-700 text-xs font-semibold bg-slate-800 text-slate-300";
+      });
+
+      if (valor === "Conforme" || valor === "Sim") btn.classList.add("active-conforme");
+      else if (valor === "Não Conforme" || valor === "Não") btn.classList.add("active-naoconforme");
+      else btn.classList.add("active-na");
+    }
+
+    function previewFoto(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        fotoBase64Atual = ev.target.result;
+        document.getElementById("imgPreview").src = fotoBase64Atual;
+        document.getElementById("boxPreviewFoto").classList.remove("hidden");
+        document.getElementById("labelFoto").textContent = "Evidência capturada!";
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removerFoto() {
+      fotoBase64Atual = null;
+      document.getElementById("inputFoto").value = "";
+      document.getElementById("imgPreview").src = "";
+      document.getElementById("boxPreviewFoto").classList.add("hidden");
+      document.getElementById("labelFoto").textContent = "Tirar ou Anexar Foto";
+    }
+
+    // ====================================================
+    // MOTOR DE PERSISTÊNCIA OFFLINE (FILA DE SINCRONIZAÇÃO)
+    // ====================================================
+    async function salvarInspecao() {
+      const respostas = {};
+      let todasPreenchidas = true;
+      let temNaoConformidade = false;
+
+      perguntasAtuais.forEach(p => {
+        const input = document.getElementById("resp_" + p.idPergunta);
+        const valor = input.value;
+        if (p.obrigatorio && !valor) todasPreenchidas = false;
+        if (valor === "Não Conforme" || valor === "Não") temNaoConformidade = true;
+        respostas[p.item] = valor || "N/A";
+      });
+
+      if (!todasPreenchidas) {
+        alert("Preencha todos os itens do checklist antes de salvar.");
+        return;
+      }
+
+      const inspetor = document.getElementById("txtInspetor").value.trim();
+      if (!inspetor) {
+        alert("Informe o nome do inspetor.");
+        return;
+      }
+
+      const payload = {
+        idEquipamento: equipamentoAtual.idEquipamento,
+        tag: equipamentoAtual.tag,
+        idEstacao: equipamentoAtual.idEstacao,
+        inspetorNome: inspetor,
+        statusGeral: temNaoConformidade ? "NÃO CONFORME" : "CONFORME",
+        respostas: respostas,
+        observacoes: document.getElementById("txtObs").value.trim(),
+        fotoBase64: fotoBase64Atual
+      };
+
+      // Se estiver offline ou falhar a conexão, salva no dispositivo
+      if (!navigator.onLine) {
+        armazenarInspecaoOffline(payload);
+        return;
+      }
+
+      exibirLoading("Gravando inspeção na nuvem...");
+      try {
+        const res = await chamarBackend("registrarInspecao", { payload });
+        ocultarLoading();
+        if (res.sucesso) {
+          alert("Inspeção gravada na planilha com sucesso!\nID: " + res.idInspecao);
+          desmarcarEquipamento();
+          document.getElementById("txtObs").value = "";
+          mudarAba('dashboard');
+        } else {
+          armazenarInspecaoOffline(payload);
+        }
+      } catch (err) {
+        ocultarLoading();
+        armazenarInspecaoOffline(payload);
+      }
+    }
+
+    function armazenarInspecaoOffline(payload) {
+      let fila = JSON.parse(localStorage.getItem("fila_inspecoes_offline") || "[]");
+      fila.push({ payload, timestamp: Date.now() });
+      localStorage.setItem("fila_inspecoes_offline", JSON.stringify(fila));
+
+      alert("Sem conexão no momento ou rede instável.\nA inspeção foi salva OFFLINE com segurança no aparelho e será sincronizada assim que a conexão retornar!");
+      desmarcarEquipamento();
+      document.getElementById("txtObs").value = "";
+      verificarFilaOffline();
+    }
+
+    function verificarFilaOffline() {
+      const fila = JSON.parse(localStorage.getItem("fila_inspecoes_offline") || "[]");
+      const btnSync = document.getElementById("btnSincronizar");
+      const contador = document.getElementById("contagemPendentes");
+
+      if (fila.length > 0) {
+        btnSync.classList.remove("hidden");
+        contador.textContent = fila.length;
+      } else {
+        btnSync.classList.add("hidden");
+      }
+    }
+
+    async function sincronizarFilaOffline() {
+      let fila = JSON.parse(localStorage.getItem("fila_inspecoes_offline") || "[]");
+      if (fila.length === 0) return;
+
+      exibirLoading(`Sincronizando ${fila.length} inspeções pendentes...`);
+      let erros = 0;
+      let filaRestante = [];
+
+      for (let item of fila) {
+        try {
+          await chamarBackend("registrarInspecao", { payload: item.payload });
+        } catch (e) {
+          erros++;
+          filaRestante.push(item);
+        }
+      }
+
+      localStorage.setItem("fila_inspecoes_offline", JSON.stringify(filaRestante));
+      ocultarLoading();
+      verificarFilaOffline();
+
+      if (erros === 0) {
+        alert("Todas as inspeções offline foram sincronizadas com o banco com sucesso!");
+        carregarTudo();
+      } else {
+        alert(`Sincronização parcial: ${erros} inspeções ainda aguardam melhor conexão.`);
+      }
+    }
+
+    // OUTRAS FUNÇÕES (ADMIN / PDF / NAVEGAÇÃO)
+    function mudarAba(aba) {
+      const vDash = document.getElementById("view-dashboard");
+      const vInsp = document.getElementById("view-inspecao");
+      const vAdmin = document.getElementById("view-admin");
+      const nDash = document.getElementById("navBtnDashboard");
+      const nInsp = document.getElementById("navBtnInspecao");
+      const nAdmin = document.getElementById("navBtnAdmin");
+
+      vDash.classList.add("hidden");
+      vInsp.classList.add("hidden");
+      vAdmin.classList.add("hidden");
+
+      nDash.className = "flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-400 font-medium transition";
+      nInsp.className = "flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-400 font-medium transition";
+      nAdmin.className = "flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-400 font-medium transition";
+
+      if (aba === 'dashboard') {
+        vDash.classList.remove("hidden");
+        nDash.className = "flex flex-col items-center justify-center py-1.5 rounded-xl text-amber-400 font-semibold transition";
+      } else if (aba === 'inspecao') {
+        vInsp.classList.remove("hidden");
+        nInsp.className = "flex flex-col items-center justify-center py-1.5 rounded-xl text-amber-400 font-semibold transition";
+      } else if (aba === 'admin') {
+        vAdmin.classList.remove("hidden");
+        nAdmin.className = "flex flex-col items-center justify-center py-1.5 rounded-xl text-amber-400 font-semibold transition";
+      }
+    }
+
+    async function abrirModalVencimentos() {
+      exibirLoading("Buscando vencimentos...");
+      try {
+        const lista = await chamarBackend("obterEquipamentosVencendo");
+        ocultarLoading();
+        const container = document.getElementById("conteudoModalVencimentos");
+        container.innerHTML = "";
+        if (!lista || lista.length === 0) {
+          container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">Nenhum equipamento próximo do vencimento.</div>`;
+        } else {
+          lista.forEach(item => {
+            const isVencido = item.statusVencimento === "VENCIDO";
+            container.innerHTML += `
+              <div class="p-3 bg-slate-800/60 border border-slate-700 rounded-xl flex items-center justify-between text-xs">
+                <div>
+                  <b class="text-white">TAG ${item.tag}</b>
+                  <p class="text-slate-300 mt-0.5">${item.estacao} &bull; ${item.local}</p>
+                </div>
+                <b class="${isVencido ? 'text-red-400' : 'text-amber-400'}">${item.vencimento}</b>
+              </div>
+            `;
+          });
+        }
+        document.getElementById("modalVencimentos").classList.remove("hidden");
+      } catch (e) {
+        ocultarLoading();
+      }
+    }
+
+    function fecharModalVencimentos() {
+      document.getElementById("modalVencimentos").classList.add("hidden");
+    }
+
+    async function emitirRelatorioPDF() {
+      const est = document.getElementById("selEstacaoPdf").value;
+      if (!est) return alert("Selecione um setor.");
+      exibirLoading("Gerando laudo técnico em PDF...");
+      try {
+        const res = await chamarBackend("gerarRelatorioPDFPorEstacao", { idEstacao: est });
+        ocultarLoading();
+        if (res.sucesso) window.open(res.urlPdf, "_blank");
+      } catch (e) {
+        ocultarLoading();
+        alert("Falha ao gerar PDF: " + e.message);
+      }
+    }
+
+    async function salvarNovaPerguntaAdmin() {
+      const tipo = document.getElementById("selAdminTipoEquip").value;
+      const texto = document.getElementById("txtAdminPergunta").value.trim();
+      const formato = document.getElementById("selAdminFormatoResp").value;
+      const obg = document.getElementById("selAdminObrigatorio").value === "SIM";
+
+      if (!texto) return alert("Digite o texto da pergunta.");
+      exibirLoading("Salvando...");
+      try {
+        await chamarBackend("adicionarPerguntaAdmin", { idTipo: tipo, textoPergunta: texto, tipoResposta: formato, obrigatorio: obg });
+        ocultarLoading();
+        alert("Pergunta adicionada ao checklist com sucesso!");
+        document.getElementById("txtAdminPergunta").value = "";
+      } catch (e) {
+        ocultarLoading();
+        alert("Erro: " + e.message);
+      }
+    }
+
+    function renderizarGraficos(dados) {
+      const ctxT = document.getElementById("chartTipos").getContext("2d");
+      if (chartTiposInstance) chartTiposInstance.destroy();
+      chartTiposInstance = new Chart(ctxT, {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(dados.contagemTipos),
+          datasets: [{ data: Object.values(dados.contagemTipos), backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#64748b'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 } } } } }
+      });
+
+      const ctxE = document.getElementById("chartEstacoes").getContext("2d");
+      if (chartEstacoesInstance) chartEstacoesInstance.destroy();
+      chartEstacoesInstance = new Chart(ctxE, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(dados.contagemEstacoes).slice(0, 6),
+          datasets: [{ data: Object.values(dados.contagemEstacoes).slice(0, 6), backgroundColor: '#6366f1', borderRadius: 6 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: '#1e293b' } }, y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } } } }
+      });
+    }
+
+    function renderizarUltimasInspecoes(lista) {
+      const c = document.getElementById("listaUltimasInspecoes");
+      if (!lista || lista.length === 0) {
+        c.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Nenhuma inspeção recente.</div>`;
+        return;
+      }
+      c.innerHTML = "";
+      lista.forEach(i => {
+        const isConf = i.status === "CONFORME";
+        c.innerHTML += `
+          <div class="p-3 bg-slate-800/50 border border-slate-700/60 rounded-xl flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2.5">
+              <span class="w-2 h-2 rounded-full ${isConf ? 'bg-emerald-400' : 'bg-red-500'}"></span>
+              <div>
+                <b class="text-white">TAG ${i.tag}</b> <span class="text-slate-400 ml-1">por ${i.inspetor}</span>
+                <p class="text-[10px] text-slate-500">${i.data}</p>
+              </div>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded ${isConf ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}">${i.status}</span>
+          </div>
+        `;
+      });
+    }
+
+    function exibirLoading(txt) {
+      document.getElementById("txtLoading").textContent = txt;
+      document.getElementById("modalLoading").classList.remove("hidden");
+    }
+    function ocultarLoading() {
+      document.getElementById("modalLoading").classList.add("hidden");
+    }
+  </script>
+</body>
+</html>
